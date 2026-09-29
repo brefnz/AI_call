@@ -76,6 +76,30 @@ class GeminiConfig:
 
 
 @dataclass
+class NineRouterConfig:
+    """Integrasi 9Router (OpenAI-compatible gateway) sebagai pengganti Gemini Live.
+
+    Project aslinya pakai Gemini Live (audio realtime bidireksional). 9Router
+    TIDAK punya realtime (lihat core/ninerouter_voice.py) — jadi ini jalur
+    pipeline STT -> LLM -> TTS terpisah.
+    """
+    base_url: str = os.getenv("NINEROUTER_BASE_URL", "http://studiouidesk.ddns.net:20128/v1")
+    api_key: str = os.getenv("NINEROUTER_API_KEY", "")
+    model_llm: str = os.getenv("NINEROUTER_MODEL_LLM", "kenari/gpt-5-5")
+    model_stt: str = os.getenv("NINEROUTER_MODEL_STT", "kenari/whisper-large-v3-turbo")
+    model_tts: str = os.getenv("NINEROUTER_MODEL_TTS", "kenari/kokoro-tts")
+    tts_voice: str = os.getenv("NINEROUTER_TTS_VOICE", "af_heart")
+    language: str = os.getenv("NINEROUTER_LANGUAGE", "id")
+    # Kontrak audio: caller masuk PCM16 @ sample_rate_rtp (ulaw=8000),
+    # STT butuh PCM16 @ input_sample_rate_hz (16000).
+    sample_rate_rtp: int = int(os.getenv("NINEROUTER_RTP_RATE", "8000"))
+    input_sample_rate_hz: int = 16000
+    # VAD energi (tuning dibutuhkan di lingkungan produksi)
+    vad_threshold: int = int(os.getenv("NINEROUTER_VAD_THRESHOLD", "500"))
+    vad_end_silence_ms: int = int(os.getenv("NINEROUTER_VAD_END_SILENCE_MS", "650"))
+
+
+@dataclass
 class DatakelolaConfig:
     base_url: str = os.getenv("DATAKELOLA_BASE_URL", "")
     api_key: str = os.getenv("DATAKELOLA_API_KEY", "")
@@ -110,9 +134,13 @@ class AppConfig:
     db_path: str = os.getenv("DB_PATH", "./db/ai_outbound.sqlite3")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     scheduler_poll_interval_sec: int = int(os.getenv("SCHEDULER_POLL_INTERVAL_SEC", "5"))
+    # Mesin suara: "gemini" (Gemini Live realtime, default) atau "ninerouter"
+    # (pipeline STT->LLM->TTS lewat 9Router, lihat core/ninerouter_voice.py).
+    voice_engine: str = os.getenv("VOICE_ENGINE", "gemini")
     ari: AriConfig = field(default_factory=AriConfig)
     rtp: RtpBridgeConfig = field(default_factory=RtpBridgeConfig)
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
+    ninerouter: NineRouterConfig = field(default_factory=NineRouterConfig)
     datakelola: DatakelolaConfig = field(default_factory=DatakelolaConfig)
     campaign: CampaignDefaults = field(default_factory=CampaignDefaults)
     inbound: InboundConfig = field(default_factory=InboundConfig)

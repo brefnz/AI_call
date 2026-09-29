@@ -157,6 +157,9 @@ class CallSession:
     # ---------------- conversation loop ----------------
 
     async def _run_conversation(self) -> str:
+        if settings.voice_engine == "ninerouter":
+            return await self._run_conversation_pipeline()
+
         await self.ari.answer_channel(self.channel_id)
 
         self.bridge_id = (await self.ari.create_bridge())["id"]
@@ -317,7 +320,94 @@ class CallSession:
         )
         return outcome
 
+    # ---------------- jalur 9Router (STT -> LLM -> TTS) ----------------
+
+    async def _run_conversation_pipeline(self) -> str:
+        """Alternatif _run_conversation memakai 9Router (core/ninerouter_voice.py).
+
+        Setup telephony (answer/bridge/externalMedia/RTP) identik dengan jalur
+        Gemini; yang berbeda hanya loop percakapan: turn-based STT->LLM->TTS.
+        """
+        await self.ari.answer_channel(self.channel_id)
+
+        self.bridge_id = (await self.ari.create_bridge())["id"]
+        await self.ari.add_channel_to_bridge(self.bridge_id, self.channel_id)
+
+        port = await self.port_pool.acquire()
+        self.rtp = RtpEndpoint(settings.rtp, port)
+        self.rtp._loopback_test = False
+        await self.rtp.start()
+
+        em_channel = await self.ari.create_external_media_channel(
+            external_host=f"{settings.rtp.advertise_host}:{port}",
+            codec=settings.rtp.codec,
+        )
+        self.em_channel_id = em_channel["id"]
+        await self.ari.add_channel_to_bridge(self.bridge_id, self.em_channel_id)
+
+        try:
+            await self.rtp.wait_ready(timeout=3.0)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "RTP endpoint belum terima paket pertama dari Asterisk "
+                "setelah 3 detik, session=%s -- lanjut aja", self.session_id,
+            )
+
+        await self.db.execute(
+            "UPDATE call_session SET status=?, gemini_session_id=? WHERE id=?",
+            (CallState.IN_PROGRESS.value, self.session_id, self.session_id),
+        )
+        await self.db.log_event(
+            "GEMINI_SESSION_STARTED", call_session_id=self.session_id, gemini_session_id=self.session_id
+        )
+
+        from core.ninerouter_voice import NineRouterVoice
+
+        voice = NineRouterVoice(settings.ninerouter, self.topic)
+        stop_event = asyncio.Event()
+
+        async def _hangup_watcher():
+            await self._channel_ended_future
+            stop_event.set()
+
+        watcher_task = asyncio.create_task(_hangup_watcher())
+
+        async def on_tool_call(name: str, args: dict) -> dict:
+            return await self._execute_tool_call(name, args)
+
+        async def on_transcript(speaker: str, text: str) -> None:
+            await self.db.add_transcript(self.session_id, speaker, text)
+
+        try:
+            await voice.run_conversation(
+                audio_queue=self.rtp.pcm_in_queue,
+                send_pcm=self.rtp.send_pcm,
+                on_tool_call=on_tool_call,
+                on_transcript=on_transcript,
+                kickoff_text=self._kickoff_text(),
+                stop_event=stop_event,
+                end_predicate=self._pipeline_end_predicate,
+            )
+        except asyncio.CancelledError:
+            logger.info("Pipeline 9Router di-cancel, session=%s", self.session_id)
+        except Exception as e:
+            logger.exception("Error pipeline 9Router, session=%s: %s", self.session_id, e)
+        finally:
+            watcher_task.cancel()
+
+        outcome = self.state.compute_outcome(telephony_connected=True)
+        quality = self.state.compute_quality()
+        await self.db.execute(
+            "UPDATE call_session SET conversation_result=? WHERE id=?",
+            (quality, self.session_id),
+        )
+        return outcome
+
     # ---------------- hook (di-override InboundSession) ----------------
+
+    def _pipeline_end_predicate(self) -> bool:
+        """Dicek antar-turn oleh pipeline 9Router; True = hentikan percakapan."""
+        return self.state.end_requested or not self._telephony_connected
 
     def _create_gemini(self) -> GeminiLiveSession:
         return GeminiLiveSession(settings.gemini, self.topic)
@@ -354,11 +444,13 @@ class CallSession:
             pcm16k = self._resampler_in.process(pcm)
             await gemini.send_audio(pcm16k)
 
-    async def _handle_tool_call(self, gemini: GeminiLiveSession, tool_call: dict):
-        name = tool_call["name"]
-        args = tool_call["args"]
-        call_id = tool_call["id"]
+    async def _execute_tool_call(self, name: str, args: dict) -> dict:
+        """Eksekusi tool call murni (mutasi state/DB), return hasil sebagai dict.
 
+        Dipisah dari _handle_tool_call supaya bisa dipakai dua jalur:
+        - Gemini Live: hasilnya dikirim balik via gemini.send_tool_response.
+        - Pipeline 9Router: hasilnya di-append sebagai pesan role=tool.
+        """
         if name == "record_answer":
             question_id = args.get("question_id")
             status = args.get("status", "UNCLEAR")
@@ -369,24 +461,31 @@ class CallSession:
                 await self.db.log_event(
                     "ANSWER_RECEIVED", call_session_id=self.session_id, status=status
                 )
-            await gemini.send_tool_response(call_id, name, {"recorded": ok})
+            return {"recorded": ok}
 
         elif name == "request_human_agent":
             self.state.request_human_agent()
             await self.db.log_event("REQUEST_HUMAN_AGENT", call_session_id=self.session_id)
             # TODO: jika transfer ARI ke human agent tersedia, panggil ari.originate/redirect di sini.
-            await gemini.send_tool_response(call_id, name, {"acknowledged": True})
+            return {"acknowledged": True}
 
         elif name == "end_conversation":
             self.state.request_end(args.get("summary", ""))
             await self.db.log_event(
                 "CALL_COMPLETED", call_session_id=self.session_id, status="END_REQUESTED"
             )
-            await gemini.send_tool_response(call_id, name, {"acknowledged": True})
+            return {"acknowledged": True}
 
         else:
             logger.warning("Tool call tidak dikenal: %s", name)
-            await gemini.send_tool_response(call_id, name, {"error": "unknown tool"})
+            return {"error": "unknown tool"}
+
+    async def _handle_tool_call(self, gemini: GeminiLiveSession, tool_call: dict):
+        name = tool_call["name"]
+        args = tool_call["args"]
+        call_id = tool_call["id"]
+        result = await self._execute_tool_call(name, args)
+        await gemini.send_tool_response(call_id, name, result)
 
     # ---------------- cleanup & report ----------------
 

@@ -93,14 +93,23 @@ class InboundSession(CallSession):
             "'support', 'sales', atau 'campaign' dan isi summary singkat keperluan penelepon."
         )
 
-    async def _handle_tool_call(self, gemini, tool_call: dict):
-        await super()._handle_tool_call(gemini, tool_call)
-        if tool_call["name"] == "request_human_agent":
-            args = tool_call.get("args") or {}
+    async def _execute_tool_call(self, name: str, args: dict) -> dict:
+        result = await super()._execute_tool_call(name, args)
+        if name == "request_human_agent":
+            args = args or {}
             queue = str(args.get("queue", DEFAULT_QUEUE)).strip().lower()
             self._transfer_queue = queue if queue in ALLOWED_QUEUES else DEFAULT_QUEUE
             self._summary = _clean(args.get("summary") or args.get("reason") or "")
             self._transfer_at = asyncio.get_event_loop().time()
+        return result
+
+    def _pipeline_end_predicate(self) -> bool:
+        if not self._telephony_connected:
+            return True
+        if self._transfer_queue:
+            # farewell serah-terima sudah selesai diucapkan -> hentikan untuk transfer
+            return True
+        return self.state.end_requested
 
     def _should_stop(self, turn_event) -> bool:
         if not self._telephony_connected:
