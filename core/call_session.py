@@ -56,6 +56,13 @@ class CallSession:
         self.started_at = None
         self.connected_at = None
 
+        # REVISI: buffer untuk gabungkan transcript_text yang di-stream Gemini
+        # per kata/token (bukan per kalimat) sebelum disimpan ke DB. Tanpa
+        # ini, setiap event transcript_text yang datang (bisa puluhan per
+        # kalimat) langsung jadi baris transcript terpisah di dashboard --
+        # lihat _flush_transcript_buffer() dan pemakaiannya di run().
+        self._transcript_buffer = {"speaker": None, "text": ""}
+
     # ---------------- public entrypoint ----------------
 
     async def run(self) -> dict:
@@ -270,9 +277,19 @@ class CallSession:
                         await self.rtp.send_pcm(pcm16k)
 
                     if turn_event.transcript_text:
-                        await self.db.add_transcript(
-                            self.session_id, turn_event.transcript_speaker, turn_event.transcript_text
-                        )
+                        # REVISI: jangan langsung INSERT tiap potongan --
+                        # gabungkan dulu di buffer selama speaker sama, flush
+                        # (simpan sebagai satu baris utuh) begitu speaker
+                        # ganti atau giliran bicara selesai (turn_complete).
+                        buf = self._transcript_buffer
+                        if buf["speaker"] not in (None, turn_event.transcript_speaker):
+                            await self._flush_transcript_buffer()
+                            buf = self._transcript_buffer
+                        buf["speaker"] = turn_event.transcript_speaker
+                        buf["text"] += turn_event.transcript_text
+
+                    if turn_event.turn_complete:
+                        await self._flush_transcript_buffer()
 
                     if turn_event.tool_call:
                         await self._handle_tool_call(gemini, turn_event.tool_call)
@@ -286,6 +303,10 @@ class CallSession:
                 )
             finally:
                 watcher_task.cancel()
+                # Jaga-jaga: kalau call berakhir (hangup/cancel) di tengah
+                # kalimat sebelum turn_complete sempat diterima, sisa buffer
+                # tetap disimpan -- daripada hilang begitu saja.
+                await self._flush_transcript_buffer()
                 logger.info("Conversation loop selesai, total event dari Gemini=%d session=%s", event_count, self.session_id)
                 uplink_task.cancel()
 
@@ -296,6 +317,19 @@ class CallSession:
             (quality, self.session_id),
         )
         return outcome
+
+    async def _flush_transcript_buffer(self):
+        """
+        Simpan buffer transcript_text yang terkumpul (satu speaker, satu
+        giliran bicara) sebagai SATU baris di tabel transcript, lalu kosongkan
+        buffer. Dipanggil saat speaker ganti, turn_complete, atau di finally
+        block loop percakapan (lihat run()).
+        """
+        buf = self._transcript_buffer
+        text = buf["text"].strip()
+        if text:
+            await self.db.add_transcript(self.session_id, buf["speaker"], text)
+        self._transcript_buffer = {"speaker": None, "text": ""}
 
     async def _pump_caller_audio_to_gemini(self, gemini: GeminiLiveSession):
         while True:

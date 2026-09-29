@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Outbound Calling — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDEFF2; --panel:#F7F8FA; --panel2:#FFFFFF;
+    --ink:#14181F; --ink-soft:#4A515C; --line:#D3D7DD;
+    --amber:#D98C2B; --amber-dim:#F1D9B4;
+    --teal:#2F7A63; --teal-dim:#D6E9E2;
+    --blue:#2E6FA3; --blue-dim:#D6E4EF;
+    --red:#B0432E; --red-dim:#F2D9D2;
+    --font-display:'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#14171C; --panel:#1B1F26; --panel2:#20242C;
+      --ink:#ECEEF1; --ink-soft:#9AA2AD; --line:#2C323B;
+      --amber:#E8A33D; --amber-dim:#3A2E17;
+      --teal:#4FA98A; --teal-dim:#173028;
+      --blue:#5B9BD1; --blue-dim:#182838;
+      --red:#D97A63; --red-dim:#3A1F1A;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14171C; --panel:#1B1F26; --panel2:#20242C;
+    --ink:#ECEEF1; --ink-soft:#9AA2AD; --line:#2C323B;
+    --amber:#E8A33D; --amber-dim:#3A2E17;
+    --teal:#4FA98A; --teal-dim:#173028;
+    --blue:#5B9BD1; --blue-dim:#182838;
+    --red:#D97A63; --red-dim:#3A1F1A;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:var(--font-display);}
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 28px; border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:var(--paper); z-index:10;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 3px var(--teal-dim);}
+  .brand h1{font-size:16px; font-weight:600; margin:0;}
+
+  .tabs{display:flex; gap:4px;}
+  .tab-btn{
+    font-family:var(--font-display); font-size:13.5px; font-weight:600;
+    padding:9px 16px; border-radius:7px; border:1px solid transparent;
+    background:transparent; color:var(--ink-soft); cursor:pointer;
+  }
+  .tab-btn:hover{ background:var(--panel); }
+  .tab-btn.active{ background:var(--ink); color:var(--paper); }
+  .tab-btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+
+  .api-cfg{
+    display:flex; align-items:center; gap:6px;
+    font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft);
+  }
+  .api-cfg input{
+    font-family:var(--font-mono); font-size:11.5px; padding:5px 8px;
+    border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    width:190px;
+  }
+  .api-status{width:7px;height:7px;border-radius:50%;background:var(--red); flex-shrink:0;}
+  .api-status.ok{background:var(--teal);}
+
+  main{ padding:28px; max-width:1180px; margin:0 auto; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  h2.section-title{font-size:20px; font-weight:600; margin:0 0 4px 0;}
+  p.section-sub{font-size:13.5px; color:var(--ink-soft); margin:0 0 22px 0; max-width:70ch; line-height:1.5;}
+
+  /* --- cards / panels --- */
+  .card{
+    background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+    padding:20px 22px; margin-bottom:18px;
+  }
+  .card h3{font-size:14.5px; font-weight:600; margin:0 0 14px 0;}
+
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field.full{ grid-column:1/-1; }
+  .field label{ font-size:12px; font-weight:600; color:var(--ink-soft); }
+  .field .hint{ font-size:11px; color:var(--ink-soft); }
+  input[type=text],input[type=number],input[type=date],input[type=time],textarea,select{
+    font-family:var(--font-display); font-size:13.5px; padding:9px 11px;
+    border-radius:7px; border:1px solid var(--line); background:var(--panel); color:var(--ink);
+  }
+  textarea{ font-family:var(--font-mono); font-size:12.5px; min-height:80px; resize:vertical; line-height:1.5; }
+  input:focus-visible, textarea:focus-visible, select:focus-visible{
+    outline:2px solid var(--amber); outline-offset:1px; border-color:var(--amber);
+  }
+
+  .btn{
+    font-family:var(--font-display); font-size:13px; font-weight:600;
+    padding:9px 15px; border-radius:7px; border:1px solid transparent; cursor:pointer;
+  }
+  .btn-primary{ background:var(--ink); color:var(--paper); }
+  .btn-primary:hover{ opacity:0.88; }
+  .btn-ghost{ background:transparent; color:var(--ink); border-color:var(--line); }
+  .btn-ghost:hover{ background:var(--panel); }
+  .btn-danger{ background:transparent; color:var(--red); border-color:var(--red-dim); }
+  .btn-danger:hover{ background:var(--red-dim); }
+  .btn-sm{ font-size:12px; padding:6px 11px; }
+  .btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .btn-row{ display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+
+  .q-row{
+    display:grid; grid-template-columns: 2fr 90px 110px 90px 32px;
+    gap:8px; align-items:center; margin-bottom:8px;
+  }
+  .q-row input, .q-row select{ font-size:12.5px; padding:7px 9px; }
+  .q-row button{
+    background:transparent; border:1px solid var(--line); border-radius:6px;
+    color:var(--red); cursor:pointer; height:32px;
+  }
+
+  /* --- wallboard --- */
+  .stat-grid{
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:14px;
+  }
+  @media (max-width:860px){ .stat-grid{ grid-template-columns:repeat(2,1fr); } }
+  .stat-card{
+    background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+    padding:16px 18px;
+  }
+  .stat-card .label{ font-size:11px; font-weight:600; color:var(--ink-soft); letter-spacing:0.01em; }
+  .stat-card .value{ font-family:var(--font-mono); font-size:26px; font-weight:600; margin:6px 0 4px 0; }
+  .stat-card .sub{ font-size:11.5px; color:var(--ink-soft); }
+  .v-teal{ color:var(--teal); } .v-amber{ color:var(--amber); }
+  .v-red{ color:var(--red); } .v-blue{ color:var(--blue); }
+
+  /* --- table --- */
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{
+    text-align:left; font-size:11px; font-weight:600; color:var(--ink-soft);
+    letter-spacing:0.01em; padding:9px 10px; border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr:hover{ background:var(--panel); }
+  .icon-btn{
+    background:transparent; border:1px solid var(--line); border-radius:6px;
+    width:30px; height:30px; cursor:pointer; color:var(--ink-soft);
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ color:var(--ink); background:var(--panel); }
+
+  .pill{ font-family:var(--font-mono); font-size:10.5px; padding:3px 8px; border-radius:99px; white-space:nowrap; }
+  .pill-teal{ background:var(--teal-dim); color:var(--teal); }
+  .pill-amber{ background:var(--amber-dim); color:var(--amber); }
+  .pill-red{ background:var(--red-dim); color:var(--red); }
+  .pill-blue{ background:var(--blue-dim); color:var(--blue); }
+  .pill-grey{ background:var(--line); color:var(--ink-soft); }
+
+  .campaign-list{ display:flex; flex-direction:column; gap:8px; }
+  .campaign-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 14px; border:1px solid var(--line); border-radius:8px;
+  }
+  .campaign-row .cr-name{ font-weight:600; font-size:14px; }
+  .campaign-row .cr-meta{ font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .campaign-row .cr-actions{ display:flex; gap:8px; align-items:center; }
+
+  .empty-state{
+    font-size:13px; color:var(--ink-soft); padding:20px; text-align:center;
+    border:1px dashed var(--line); border-radius:8px;
+  }
+
+  /* --- modal --- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.45);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:24px;
+  }
+  .modal-backdrop.show{ display:flex; }
+  .modal{
+    background:var(--panel2); border-radius:12px; width:100%; max-width:720px;
+    max-height:85vh; display:flex; flex-direction:column; overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .modal-head{
+    padding:18px 22px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:flex-start;
+  }
+  .modal-head h3{ margin:0 0 4px 0; font-size:16px; }
+  .modal-head .meta{ font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft); }
+  .modal-close{ background:transparent; border:none; font-size:20px; cursor:pointer; color:var(--ink-soft); line-height:1; }
+  .modal-body{ padding:18px 22px; overflow-y:auto; }
+  .modal-section{ margin-bottom:20px; }
+  .modal-section h4{ font-size:12px; font-weight:600; color:var(--ink-soft); margin:0 0 10px 0; }
+
+  .transcript-line{ display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; }
+  .transcript-line .who{
+    font-family:var(--font-mono); font-size:10.5px; font-weight:600; padding:2px 7px;
+    border-radius:5px; flex-shrink:0; margin-top:2px; width:52px; text-align:center;
+  }
+  .who-AI{ background:var(--blue-dim); color:var(--blue); }
+  .who-CALLER{ background:var(--teal-dim); color:var(--teal); }
+  .transcript-line .txt{ font-size:13.5px; line-height:1.5; }
+  .transcript-line .ts{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-soft); margin-top:3px; }
+
+  .answer-item{
+    padding:9px 12px; border:1px solid var(--line); border-radius:7px; margin-bottom:7px;
+    display:flex; justify-content:space-between; gap:10px; align-items:center;
+  }
+  .answer-item .q{ font-size:12.5px; }
+  .answer-item .a{ font-size:12.5px; color:var(--ink-soft); text-align:right; }
+
+  .toast{
+    position:fixed; bottom:24px; right:24px; background:var(--ink); color:var(--paper);
+    font-size:13px; padding:10px 16px; border-radius:8px; opacity:0;
+    transform:translateY(8px); transition:opacity 0.2s ease, transform 0.2s ease; pointer-events:none; z-index:200;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  @media (prefers-reduced-motion: reduce){ .toast{ transition:none; } }
+
+  .filter-row{ display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center; }
+  .filter-row select{ font-size:12.5px; padding:7px 10px; }
+  .pager{ display:flex; gap:8px; align-items:center; margin-top:14px; font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot" id="apiDot"></span><h1>AI Outbound Calling</h1></div>
+  <div class="tabs">
+    <button class="tab-btn active" data-view="blasting">Blasting</button>
+    <button class="tab-btn" data-view="wallboard">Wallboard</button>
+    <button class="tab-btn" data-view="calls">Riwayat Call</button>
+  </div>
+  <div class="api-cfg">
+    <span class="api-status" id="apiStatus"></span>
+    <span>API:</span>
+    <input type="text" id="apiBase" value="http://localhost:8090">
+  </div>
+</div>
+
+<main>
+
+  <!-- ============ TAB 1: BLASTING ============ -->
+  <section class="view active" id="view-blasting">
+    <h2 class="section-title">Blasting</h2>
+    <p class="section-sub">Bikin topik (skrip AI + pertanyaan), bikin campaign, lalu masukin nomor yang mau dihubungi.</p>
+
+    <div class="card">
+      <h3>1. Topik</h3>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="topicName">Nama topik</label>
+          <input type="text" id="topicName" placeholder="mis. Reminder Tagihan Q1">
+        </div>
+        <div class="field full">
+          <label for="topicObjective">Tujuan percakapan</label>
+          <input type="text" id="topicObjective" placeholder="mis. Mengingatkan pelanggan soal tagihan jatuh tempo">
+        </div>
+        <div class="field full">
+          <label for="topicDesc">Deskripsi (opsional)</label>
+          <input type="text" id="topicDesc" placeholder="Catatan internal soal topik ini">
+        </div>
+        <div class="field full">
+          <label for="topicInstruction">Instruksi tambahan untuk AI (opsional)</label>
+          <textarea id="topicInstruction" placeholder="Aturan tambahan spesifik topik ini, di luar aturan dasar..."></textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;">
+        <label style="font-size:12px; font-weight:600; color:var(--ink-soft);">Pertanyaan</label>
+        <div id="questionRows" style="margin-top:8px;"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="addQuestionBtn">+ Tambah pertanyaan</button>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="saveTopicBtn">Simpan topik</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>2. Campaign</h3>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="campName">Nama campaign</label>
+          <input type="text" id="campName" placeholder="mis. Blasting Tagihan — Wave 1">
+        </div>
+        <div class="field full">
+          <label for="campTopic">Topik</label>
+          <select id="campTopic"></select>
+        </div>
+        <div class="field">
+          <label for="campStart">Tanggal mulai</label>
+          <input type="date" id="campStart">
+        </div>
+        <div class="field">
+          <label for="campEnd">Tanggal selesai</label>
+          <input type="date" id="campEnd">
+        </div>
+        <div class="field">
+          <label for="campStartTime">Jam mulai panggil</label>
+          <input type="time" id="campStartTime" value="09:00">
+        </div>
+        <div class="field">
+          <label for="campEndTime">Jam selesai panggil</label>
+          <input type="time" id="campEndTime" value="17:00">
+        </div>
+        <div class="field">
+          <label for="campConcurrent">Concurrent limit</label>
+          <input type="number" id="campConcurrent" value="5" min="1">
+        </div>
+        <div class="field">
+          <label for="campRetry">Max retry</label>
+          <input type="number" id="campRetry" value="2" min="0">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="saveCampaignBtn">Buat campaign</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>3. Masukin nomor ke campaign</h3>
+      <div class="form-grid">
+        <div class="field">
+          <label for="targetCampaign">Campaign tujuan</label>
+          <select id="targetCampaign"></select>
+        </div>
+        <div class="field full">
+          <label for="targetList">Daftar nomor</label>
+          <textarea id="targetList" placeholder="Satu baris per nomor. Data tambahan opsional pakai koma:&#10;081234567890&#10;081298765432, {&quot;nama&quot;:&quot;Budi&quot;,&quot;no_tagihan&quot;:&quot;INV-001&quot;}"></textarea>
+          <span class="hint">Format per baris: nomor_telepon[, JSON data tambahan opsional]</span>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="uploadTargetsBtn">Masukin ke campaign</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Daftar campaign</h3>
+      <div class="campaign-list" id="campaignList"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 2: WALLBOARD ============ -->
+  <section class="view" id="view-wallboard">
+    <h2 class="section-title">Wallboard</h2>
+    <p class="section-sub">Status blasting real-time. Refresh otomatis tiap 5 detik.</p>
+
+    <div class="filter-row">
+      <select id="wallboardCampaign"><option value="">Semua campaign</option></select>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">TOTAL TARGET</div><div class="value" id="w_total">0</div><div class="sub">nomor di campaign ini</div></div>
+      <div class="stat-card"><div class="label">TERHUBUNG</div><div class="value v-teal" id="w_connected">0</div><div class="sub">call terjawab</div></div>
+      <div class="stat-card"><div class="label">TIDAK TERANGKAT</div><div class="value v-amber" id="w_noanswer">0</div><div class="sub">no answer</div></div>
+      <div class="stat-card"><div class="label">GAGAL / SIBUK</div><div class="value v-red" id="w_failed">0</div><div class="sub">failed, busy, rejected</div></div>
+
+      <div class="stat-card"><div class="label">SEDANG BERLANGSUNG</div><div class="value v-blue" id="w_active">0</div><div class="sub">call aktif sekarang</div></div>
+      <div class="stat-card"><div class="label">MENUNGGU DIPANGGIL</div><div class="value" id="w_pending">0</div><div class="sub">antrian PENDING</div></div>
+      <div class="stat-card"><div class="label">ANSWER RATE</div><div class="value v-teal" id="w_rate">0%</div><div class="sub">terhubung / total</div></div>
+      <div class="stat-card"><div class="label">RATA-RATA DURASI</div><div class="value" id="w_avgdur">00:00</div><div class="sub">per call terhubung</div></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 3: RIWAYAT CALL ============ -->
+  <section class="view" id="view-calls">
+    <h2 class="section-title">Riwayat Call</h2>
+    <p class="section-sub">Semua panggilan yang sudah dilakukan. Klik ikon mata untuk lihat transcript.</p>
+
+    <div class="filter-row">
+      <select id="callsCampaignFilter"><option value="">Semua campaign</option></select>
+      <select id="callsStatusFilter">
+        <option value="">Semua status</option>
+        <option value="COMPLETED">COMPLETED</option>
+        <option value="IN_PROGRESS">IN_PROGRESS</option>
+        <option value="CONNECTED">CONNECTED</option>
+        <option value="FAILED">FAILED</option>
+        <option value="INCOMPLETE">INCOMPLETE</option>
+      </select>
+      <button type="button" class="btn btn-ghost btn-sm" id="refreshCallsBtn">Refresh</button>
+    </div>
+
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th><th></th><th>Nomor</th><th>Campaign</th><th>Status</th>
+            <th>Outcome</th><th>Mulai</th><th>Durasi</th><th>Hasil</th>
+          </tr>
+        </thead>
+        <tbody id="callsTbody"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button type="button" class="btn btn-ghost btn-sm" id="prevPageBtn">← Sebelumnya</button>
+      <span id="pageLabel">Halaman 1</span>
+      <button type="button" class="btn btn-ghost btn-sm" id="nextPageBtn">Berikutnya →</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- Modal transcript -->
+<div class="modal-backdrop" id="transcriptModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="modalPhone">—</h3>
+        <div class="meta" id="modalMeta">—</div>
+      </div>
+      <button class="modal-close" id="closeModalBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <h4>Jawaban tercatat</h4>
+        <div id="modalAnswers"></div>
+      </div>
+      <div class="modal-section">
+        <h4>Transcript percakapan</h4>
+        <div id="modalTranscript"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const apiBaseInput = document.getElementById('apiBase');
+  apiBaseInput.value = localStorage.getItem('dashboard_api_base') || apiBaseInput.value;
+  apiBaseInput.addEventListener('change', ()=>{
+    localStorage.setItem('dashboard_api_base', apiBaseInput.value);
+    checkHealth();
+  });
+
+  function apiBase(){ return apiBaseInput.value.replace(/\/$/, ''); }
+
+  async function api(path, opts){
+    const res = await fetch(apiBase() + path, {
+      headers: {'Content-Type':'application/json'},
+      ...opts,
+    });
+    if(!res.ok){
+      const body = await res.text().catch(()=> '');
+      throw new Error(`${res.status} ${body}`);
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=> t.classList.remove('show'), 2200);
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  function fmtDuration(sec){
+    if(!sec && sec !== 0) return '—';
+    const m = Math.floor(sec/60), s = Math.round(sec%60);
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  function fmtDate(iso){
+    if(!iso) return '—';
+    try{
+      const d = new Date(iso);
+      return d.toLocaleString('id-ID', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+    }catch(e){ return iso; }
+  }
+
+  async function checkHealth(){
+    const dot = document.getElementById('apiDot');
+    const statusDot = document.getElementById('apiStatus');
+    try{
+      await api('/api/health');
+      dot.style.background = 'var(--teal)';
+      statusDot.classList.add('ok');
+    }catch(e){
+      dot.style.background = 'var(--red)';
+      statusDot.classList.remove('ok');
+    }
+  }
+
+  // ---------------- tabs ----------------
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-' + btn.dataset.view).classList.add('active');
+      if(btn.dataset.view === 'wallboard') refreshWallboard();
+      if(btn.dataset.view === 'calls') refreshCalls();
+    });
+  });
+
+  // ---------------- topic form: dynamic questions ----------------
+  let qCounter = 0;
+  function addQuestionRow(){
+    qCounter++;
+    const row = document.createElement('div');
+    row.className = 'q-row';
+    row.dataset.qid = qCounter;
+    row.innerHTML = `
+      <input type="text" placeholder="Teks pertanyaan" class="q-text">
+      <input type="number" placeholder="Urutan" class="q-order" value="${qCounter}">
+      <select class="q-type">
+        <option value="text">text</option>
+        <option value="yes_no">yes_no</option>
+        <option value="scale">scale</option>
+        <option value="choice">choice</option>
+      </select>
+      <select class="q-mandatory">
+        <option value="1">Wajib</option>
+        <option value="0">Opsional</option>
+      </select>
+      <button type="button" title="Hapus">&times;</button>
+    `;
+    row.querySelector('button').addEventListener('click', ()=> row.remove());
+    document.getElementById('questionRows').appendChild(row);
+  }
+  document.getElementById('addQuestionBtn').addEventListener('click', addQuestionRow);
+  addQuestionRow(); // mulai dengan 1 baris
+
+  document.getElementById('saveTopicBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('topicName').value.trim();
+    const objective = document.getElementById('topicObjective').value.trim();
+    if(!name || !objective){ showToast('Nama topik & tujuan wajib diisi'); return; }
+
+    const questions = [...document.querySelectorAll('#questionRows .q-row')].map(row=>({
+      text: row.querySelector('.q-text').value.trim(),
+      order: parseInt(row.querySelector('.q-order').value, 10) || 1,
+      is_mandatory: row.querySelector('.q-mandatory').value === '1',
+      answer_type: row.querySelector('.q-type').value,
+    })).filter(q=>q.text);
+
+    try{
+      await api('/api/topics', {method:'POST', body: JSON.stringify({
+        name, objective,
+        description: document.getElementById('topicDesc').value.trim() || null,
+        system_instruction: document.getElementById('topicInstruction').value.trim(),
+        questions,
+      })});
+      showToast('Topik disimpan');
+      document.getElementById('topicName').value = '';
+      document.getElementById('topicObjective').value = '';
+      document.getElementById('topicDesc').value = '';
+      document.getElementById('topicInstruction').value = '';
+      document.getElementById('questionRows').innerHTML = '';
+      qCounter = 0; addQuestionRow();
+      loadTopicsIntoSelect();
+    }catch(e){ showToast('Gagal simpan topik: ' + e.message); }
+  });
+
+  async function loadTopicsIntoSelect(){
+    try{
+      const topics = await api('/api/topics');
+      const sel = document.getElementById('campTopic');
+      sel.innerHTML = topics.length
+        ? topics.map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')
+        : '<option value="">— belum ada topik —</option>';
+    }catch(e){ /* API belum nyala, biarin kosong */ }
+  }
+
+  // ---------------- campaign form ----------------
+  document.getElementById('saveCampaignBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('campName').value.trim();
+    const topic_id = document.getElementById('campTopic').value;
+    const start_date = document.getElementById('campStart').value;
+    const end_date = document.getElementById('campEnd').value;
+    if(!name || !topic_id || !start_date || !end_date){
+      showToast('Lengkapi nama, topik, dan rentang tanggal'); return;
+    }
+    try{
+      await api('/api/campaigns', {method:'POST', body: JSON.stringify({
+        name, topic_id, start_date, end_date,
+        call_start_time: document.getElementById('campStartTime').value,
+        call_end_time: document.getElementById('campEndTime').value,
+        concurrent_limit: parseInt(document.getElementById('campConcurrent').value,10) || 5,
+        max_retry: parseInt(document.getElementById('campRetry').value,10) || 2,
+        status: 'ACTIVE',
+      })});
+      showToast('Campaign dibuat');
+      document.getElementById('campName').value = '';
+      loadCampaigns();
+    }catch(e){ showToast('Gagal buat campaign: ' + e.message); }
+  });
+
+  // ---------------- upload targets ----------------
+  document.getElementById('uploadTargetsBtn').addEventListener('click', async ()=>{
+    const campaignId = document.getElementById('targetCampaign').value;
+    const raw = document.getElementById('targetList').value.trim();
+    if(!campaignId){ showToast('Pilih campaign tujuan dulu'); return; }
+    if(!raw){ showToast('Daftar nomor kosong'); return; }
+
+    const targets = raw.split('\n').map(line=>line.trim()).filter(Boolean).map(line=>{
+      const idx = line.indexOf(',');
+      if(idx === -1) return {phone_number: line};
+      const phone = line.slice(0, idx).trim();
+      const jsonPart = line.slice(idx+1).trim();
+      let customer_data = null;
+      try{ customer_data = jsonPart ? JSON.parse(jsonPart) : null; }catch(e){ /* abaikan kalau bukan JSON valid */ }
+      return {phone_number: phone, customer_data};
+    });
+
+    try{
+      const res = await api(`/api/campaigns/${campaignId}/targets`, {
+        method:'POST', body: JSON.stringify({targets}),
+      });
+      showToast(`${res.inserted} nomor dimasukkan ke campaign`);
+      document.getElementById('targetList').value = '';
+      loadCampaigns();
+    }catch(e){ showToast('Gagal masukin nomor: ' + e.message); }
+  });
+
+  // ---------------- campaign list ----------------
+  async function loadCampaigns(){
+    try{
+      const campaigns = await api('/api/campaigns');
+      const list = document.getElementById('campaignList');
+
+      if(campaigns.length === 0){
+        list.innerHTML = '<div class="empty-state">Belum ada campaign.</div>';
+      }else{
+        list.innerHTML = campaigns.map(c=>`
+          <div class="campaign-row">
+            <div>
+              <div class="cr-name">${escapeHtml(c.name)}</div>
+              <div class="cr-meta">${escapeHtml(c.topic_name || '—')} · ${c.target_count} nomor · concurrent ${c.concurrent_limit} · retry ${c.max_retry}</div>
+            </div>
+            <div class="cr-actions">
+              <span class="pill ${c.status==='ACTIVE'?'pill-teal':c.status==='PAUSED'?'pill-amber':'pill-grey'}">${c.status}</span>
+              <button type="button" class="btn btn-ghost btn-sm" data-toggle="${c.id}" data-status="${c.status}">
+                ${c.status==='ACTIVE' ? 'Pause' : 'Aktifkan'}
+              </button>
+            </div>
+          </div>
+        `).join('');
+
+        list.querySelectorAll('[data-toggle]').forEach(btn=>{
+          btn.addEventListener('click', async ()=>{
+            const id = btn.dataset.toggle;
+            const newStatus = btn.dataset.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+            const c = campaigns.find(x=>x.id===id);
+            try{
+              await api(`/api/campaigns/${id}`, {method:'PUT', body: JSON.stringify({
+                name: c.name, topic_id: c.topic_id, start_date: c.start_date, end_date: c.end_date,
+                call_start_time: c.call_start_time, call_end_time: c.call_end_time,
+                concurrent_limit: c.concurrent_limit, max_retry: c.max_retry, status: newStatus,
+              })});
+              showToast(newStatus === 'ACTIVE' ? 'Campaign diaktifkan' : 'Campaign dipause');
+              loadCampaigns();
+            }catch(e){ showToast('Gagal ubah status: ' + e.message); }
+          });
+        });
+      }
+
+      // isi dropdown target campaign, wallboard, dan filter calls
+      const options = campaigns.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      document.getElementById('targetCampaign').innerHTML = options || '<option value="">— belum ada campaign —</option>';
+      document.getElementById('wallboardCampaign').innerHTML = '<option value="">Semua campaign</option>' + options;
+      document.getElementById('callsCampaignFilter').innerHTML = '<option value="">Semua campaign</option>' + options;
+    }catch(e){ /* API belum nyala */ }
+  }
+
+  // ---------------- wallboard ----------------
+  let wallboardTimer = null;
+  async function refreshWallboard(){
+    const campaignId = document.getElementById('wallboardCampaign').value;
+    try{
+      const w = await api('/api/wallboard' + (campaignId ? `?campaign_id=${campaignId}` : ''));
+      document.getElementById('w_total').textContent = w.total_target;
+      document.getElementById('w_connected').textContent = w.connected;
+      document.getElementById('w_noanswer').textContent = w.no_answer;
+      document.getElementById('w_failed').textContent = w.failed;
+      document.getElementById('w_active').textContent = w.calls_in_progress;
+      document.getElementById('w_pending').textContent = w.pending;
+      document.getElementById('w_rate').textContent = w.answer_rate_pct + '%';
+      document.getElementById('w_avgdur').textContent = fmtDuration(w.avg_call_duration_sec);
+    }catch(e){ /* API belum nyala */ }
+  }
+  document.getElementById('wallboardCampaign').addEventListener('change', refreshWallboard);
+  function startWallboardAutoRefresh(){
+    if(wallboardTimer) clearInterval(wallboardTimer);
+    wallboardTimer = setInterval(()=>{
+      if(document.getElementById('view-wallboard').classList.contains('active')) refreshWallboard();
+    }, 5000);
+  }
+
+  // ---------------- calls table ----------------
+  let callsOffset = 0;
+  const callsLimit = 20;
+
+  async function refreshCalls(){
+    const campaignId = document.getElementById('callsCampaignFilter').value;
+    const status = document.getElementById('callsStatusFilter').value;
+    const params = new URLSearchParams({limit: callsLimit, offset: callsOffset});
+    if(campaignId) params.set('campaign_id', campaignId);
+    if(status) params.set('status', status);
+
+    try{
+      const calls = await api('/api/calls?' + params.toString());
+      const tbody = document.getElementById('callsTbody');
+      if(calls.length === 0){
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Belum ada call yang cocok dengan filter ini.</div></td></tr>`;
+      }else{
+        tbody.innerHTML = calls.map((c, i)=>`
+          <tr>
+            <td>${callsOffset + i + 1}</td>
+            <td><button class="icon-btn" data-view-transcript="${c.id}" title="Lihat transcript">👁</button></td>
+            <td>${escapeHtml(c.phone_number)}</td>
+            <td>${escapeHtml(c.campaign_name)}</td>
+            <td><span class="pill ${statusPill(c.status)}">${c.status}</span></td>
+            <td>${escapeHtml(c.outcome || '—')}</td>
+            <td>${fmtDate(c.started_at)}</td>
+            <td>${fmtDuration(c.duration)}</td>
+            <td>${escapeHtml(c.conversation_result || '—')}</td>
+          </tr>
+        `).join('');
+        tbody.querySelectorAll('[data-view-transcript]').forEach(btn=>{
+          btn.addEventListener('click', ()=> openTranscript(btn.dataset.viewTranscript));
+        });
+      }
+      document.getElementById('pageLabel').textContent = `Halaman ${Math.floor(callsOffset/callsLimit)+1}`;
+    }catch(e){ /* API belum nyala */ }
+  }
+
+  function statusPill(status){
+    if(['COMPLETED','CONNECTED'].includes(status)) return 'pill-teal';
+    if(['CALLING','IN_PROGRESS'].includes(status)) return 'pill-blue';
+    if(['FAILED','INCOMPLETE'].includes(status)) return 'pill-red';
+    return 'pill-grey';
+  }
+
+  document.getElementById('callsCampaignFilter').addEventListener('change', ()=>{ callsOffset=0; refreshCalls(); });
+  document.getElementById('callsStatusFilter').addEventListener('change', ()=>{ callsOffset=0; refreshCalls(); });
+  document.getElementById('refreshCallsBtn').addEventListener('click', refreshCalls);
+  document.getElementById('prevPageBtn').addEventListener('click', ()=>{
+    callsOffset = Math.max(0, callsOffset - callsLimit); refreshCalls();
+  });
+  document.getElementById('nextPageBtn').addEventListener('click', ()=>{
+    callsOffset += callsLimit; refreshCalls();
+  });
+
+  // ---------------- transcript modal ----------------
+  async function openTranscript(callSessionId){
+    try{
+      const report = await api(`/api/calls/${callSessionId}/transcript`);
+      document.getElementById('modalPhone').textContent = report.phone_number || '—';
+      document.getElementById('modalMeta').textContent =
+        `${fmtDate(report.call_time)} · durasi ${fmtDuration(report.duration)} · ${report.call_outcome || '—'} · ${report.conversation_result || '—'}`;
+
+      const answersEl = document.getElementById('modalAnswers');
+      answersEl.innerHTML = (report.answers && report.answers.length)
+        ? report.answers.map(a=>`
+            <div class="answer-item">
+              <span class="q">${escapeHtml(a.question_id)}</span>
+              <span class="a">${escapeHtml(a.answer_text || '—')} · <span class="pill ${a.answer_status==='VALID'?'pill-teal':'pill-amber'}">${a.answer_status}</span></span>
+            </div>
+          `).join('')
+        : '<div class="empty-state">Belum ada jawaban tercatat.</div>';
+
+      const transcriptEl = document.getElementById('modalTranscript');
+      transcriptEl.innerHTML = (report.transcript && report.transcript.length)
+        ? report.transcript.map(t=>`
+            <div class="transcript-line">
+              <span class="who who-${t.speaker}">${t.speaker}</span>
+              <div>
+                <div class="txt">${escapeHtml(t.text)}</div>
+                <div class="ts">${fmtDate(t.timestamp)}</div>
+              </div>
+            </div>
+          `).join('')
+        : '<div class="empty-state">Transcript belum tersedia.</div>';
+
+      document.getElementById('transcriptModal').classList.add('show');
+    }catch(e){ showToast('Gagal ambil transcript: ' + e.message); }
+  }
+  document.getElementById('closeModalBtn').addEventListener('click', ()=>{
+    document.getElementById('transcriptModal').classList.remove('show');
+  });
+  document.getElementById('transcriptModal').addEventListener('click', (e)=>{
+    if(e.target.id === 'transcriptModal') e.currentTarget.classList.remove('show');
+  });
+
+  // ---------------- init ----------------
+  checkHealth();
+  loadTopicsIntoSelect();
+  loadCampaigns();
+  startWallboardAutoRefresh();
+  setInterval(checkHealth, 8000);
+})();
+</script>
+
+</body>
+</html>
