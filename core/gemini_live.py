@@ -88,15 +88,25 @@ class GeminiTurnEvent:
 
 
 class GeminiLiveSession:
-    def __init__(self, cfg: GeminiConfig, topic: Topic):
+    def __init__(
+        self,
+        cfg: GeminiConfig,
+        topic: Optional[Topic] = None,
+        system_instruction: Optional[str] = None,
+        tool_declarations: Optional[list] = None,
+    ):
+        # Mode outbound: cukup kirim `topic` (instruction & tool dari campaign).
+        # Mode inbound: kirim `system_instruction` + `tool_declarations` sendiri.
         self.cfg = cfg
         self.topic = topic
+        self._system_instruction = system_instruction
+        self._tool_declarations = tool_declarations
         self._client = genai.Client(api_key=cfg.api_key)
         self._session_ctx = None
         self._session = None
 
     async def __aenter__(self):
-        system_instruction = build_system_instruction(self.topic)
+        system_instruction = self._system_instruction or build_system_instruction(self.topic)
         live_config = types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             system_instruction=types.Content(
@@ -108,7 +118,7 @@ class GeminiLiveSession:
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=self.cfg.voice_name)
                 ),
             ),
-            tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
+            tools=[types.Tool(function_declarations=self._tool_declarations or TOOL_DECLARATIONS)],
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
         )

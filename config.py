@@ -91,6 +91,21 @@ class CampaignDefaults:
 
 
 @dataclass
+class InboundConfig:
+    enabled: bool = _get_bool("INBOUND_ENABLED", True)
+    # File JSON: nama perusahaan, sapaan, daftar layanan/FAQ (knowledge base), daftar queue.
+    profile_path: str = os.getenv("INBOUND_PROFILE_PATH", "./data/inbound_profile.json")
+    max_concurrent: int = int(os.getenv("INBOUND_MAX_CONCURRENT", "10"))
+    # Tujuan ARI `continue` saat transfer ke queue. Extension = nama queue.
+    transfer_context: str = os.getenv("INBOUND_TRANSFER_CONTEXT", "queue-router")
+    # Setelah AI memanggil transfer/end, tunggu AI selesai bicara (turn_complete).
+    # Kalau tidak selesai dalam N detik, paksa lanjut supaya caller tidak menggantung.
+    handoff_watchdog_sec: float = float(os.getenv("INBOUND_HANDOFF_WATCHDOG_SEC", "6"))
+    # Jeda kecil setelah audio terakhir dikirim sebelum transfer/hangup (jitter buffer telepon).
+    handoff_tail_sec: float = float(os.getenv("INBOUND_HANDOFF_TAIL_SEC", "0.6"))
+
+
+@dataclass
 class AppConfig:
     db_path: str = os.getenv("DB_PATH", "./db/ai_outbound.sqlite3")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
@@ -100,6 +115,7 @@ class AppConfig:
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
     datakelola: DatakelolaConfig = field(default_factory=DatakelolaConfig)
     campaign: CampaignDefaults = field(default_factory=CampaignDefaults)
+    inbound: InboundConfig = field(default_factory=InboundConfig)
 
 
 settings = AppConfig()

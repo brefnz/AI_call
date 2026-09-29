@@ -1,0 +1,90 @@
+{
+  "company": "Datakelola",
+  "assistant_name": "Sari",
+  "greeting": "Selamat datang di Datakelola, saya Sari asisten virtual. Ada yang bisa saya bantu?",
+  "default_queue": "support",
+  "custom_instruction": "Catatan: isi knowledge base ini masih draf awal. Kalau penelepon menanyakan detail yang tidak ada di hasil pencarian (harga, jadwal, syarat teknis), jangan menebak; tawarkan sambungan ke tim yang sesuai.",
+  "queues": [
+    {
+      "name": "support",
+      "label": "Tim Support Teknis",
+      "description": "Keluhan teknis: tidak bisa login CRM atau ticketing, softphone tidak bisa register/tersambung, suara putus atau tidak terdengar, notifikasi telepon masuk tidak muncul, error di aplikasi.",
+      "skills": ["CRM dan ticketing", "softphone dan telepon", "troubleshooting"]
+    },
+    {
+      "name": "campaign",
+      "label": "Tim Campaign dan Blasting",
+      "description": "Semua urusan robocall/IVR dan blasting: membuat atau mengubah campaign, jadwal dan jam operasional blasting, hasil panggilan, daftar nomor.",
+      "skills": ["robocall dan IVR", "blasting campaign", "laporan hasil panggilan"]
+    },
+    {
+      "name": "sales",
+      "label": "Tim Sales",
+      "description": "Calon pelanggan atau pelanggan yang ingin tahu produk, minta demo, penawaran, atau menambah layanan.",
+      "skills": ["demo produk", "penawaran", "penambahan layanan"]
+    }
+  ],
+  "services": [
+    {
+      "id": "svc-crm-ticketing",
+      "name": "CRM dan Ticketing",
+      "summary": "Pencatatan pelanggan dan tiket keluhan; saat telepon masuk, nomor pelanggan otomatis dicek apakah sudah terdaftar.",
+      "details": "Aplikasi CRM dan ticketing Datakelola. Ketika ada telepon masuk, nomor penelepon dicek ke ticketing untuk melihat apakah sudah terdaftar, sehingga agent langsung melihat riwayatnya. Login memakai akun SSO. DRAF: lengkapi dengan fitur dan paket yang sebenarnya.",
+      "keywords": ["crm", "ticketing", "tiket", "keluhan", "pelanggan", "login", "sso", "akun"],
+      "queue": "support"
+    },
+    {
+      "id": "svc-softphone",
+      "name": "Softphone",
+      "summary": "Aplikasi telepon untuk agent, terhubung ke sistem telepon dan CRM.",
+      "details": "Softphone dipakai agent untuk menerima dan melakukan panggilan; status agent (siap, tidak diganggu, istirahat) diatur dari CRM. DRAF: lengkapi cara instalasi dan persyaratan perangkat.",
+      "keywords": ["softphone", "telepon", "extension", "ekstensi", "register", "suara", "audio", "dering"],
+      "queue": "support"
+    },
+    {
+      "id": "svc-robocall",
+      "name": "Robocall dan Blasting",
+      "summary": "Panggilan otomatis massal ke daftar nomor untuk promosi, survei kepuasan, atau pendataan.",
+      "details": "Sistem menelepon daftar nomor sesuai campaign dalam jam operasional yang ditentukan. Hasil tiap panggilan dicatat (diangkat, tidak diangkat, ditolak, diam, jawaban tidak jelas) dan diringkas untuk tindak lanjut. Nomor yang belum terhubung dilanjutkan di hari berikutnya. Campaign baru dibuat bersama tim Datakelola, bukan diatur sendiri oleh pelanggan. DRAF: lengkapi jenis campaign dan ketentuannya.",
+      "keywords": ["robocall", "blasting", "campaign", "kampanye", "ivr", "promosi", "survei", "pendataan", "otomatis"],
+      "queue": "campaign"
+    }
+  ],
+  "faq": [
+    {
+      "id": "faq-campaign-baru",
+      "question": "Bagaimana cara membuat campaign baru?",
+      "answer": "Campaign baru dibuat bersama tim Datakelola. Pelanggan menyampaikan tujuan campaign (promosi, survei, atau pendataan), lalu tim yang menyiapkan skrip dan pengaturannya. Sambungkan penelepon ke tim Campaign dan Blasting.",
+      "keywords": ["campaign baru", "buat campaign", "bikin campaign", "ivr baru", "ubah campaign"],
+      "queue": "campaign"
+    },
+    {
+      "id": "faq-jadwal-blasting",
+      "question": "Kapan blasting dijalankan dan bagaimana jika belum semua nomor terhubung?",
+      "answer": "Blasting berjalan dalam jam operasional yang ditentukan. Nomor yang belum terhubung sampai jam operasional habis dilanjutkan di hari berikutnya.",
+      "keywords": ["jadwal", "jam operasional", "kapan", "lanjut", "besok", "belum terhubung"],
+      "queue": "campaign"
+    },
+    {
+      "id": "faq-softphone-tidak-tersambung",
+      "question": "Softphone tidak bisa tersambung atau suara tidak terdengar",
+      "answer": "Ini perlu dicek tim teknis, karena penyebabnya bisa di jaringan, pengaturan extension, atau perangkat audio. Sambungkan penelepon ke tim Support Teknis.",
+      "keywords": ["tidak tersambung", "tidak register", "suara putus", "tidak ada suara", "kresek", "mati"],
+      "queue": "support"
+    },
+    {
+      "id": "faq-login",
+      "question": "Tidak bisa login ke CRM atau ticketing",
+      "answer": "Pastikan akun SSO benar. Kalau tetap gagal, perlu dicek tim teknis. Sambungkan penelepon ke tim Support Teknis.",
+      "keywords": ["login", "masuk", "password", "sandi", "sso", "akun terkunci"],
+      "queue": "support"
+    },
+    {
+      "id": "faq-demo",
+      "question": "Bagaimana kalau ingin demo atau penawaran?",
+      "answer": "Demo dan penawaran ditangani tim Sales. Sambungkan penelepon ke tim Sales.",
+      "keywords": ["demo", "penawaran", "harga", "berlangganan", "produk", "paket"],
+      "queue": "sales"
+    }
+  ]
+}

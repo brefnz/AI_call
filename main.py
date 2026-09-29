@@ -1,5 +1,5 @@
 """
-Entry point AI Outbound Calling & Voice Blasting.
+Entry point AI Outbound Calling & Voice Blasting + Inbound receptionist (ext 800).
 
 Jalankan:  python main.py
 Prasyarat: .env sudah diisi (copy dari .env.example), Asterisk ARI user sudah
@@ -12,6 +12,8 @@ import logging
 from config import settings
 from core.ari_client import AriClient
 from core.campaign_manager import CampaignManager
+from core.inbound_session import InboundManager
+from core.topic_config import inbound_receptionist_topic
 from db.database import Database
 
 
@@ -31,8 +33,13 @@ async def main():
     await ari.connect()
 
     manager = CampaignManager(ari, db)
+    InboundManager(
+        ari, db,
+        port_pool=manager.port_pool,          # pool RTP dibagi dengan campaign
+        topic_factory=inbound_receptionist_topic,
+    )
 
-    logger.info("AI Voice Server siap. Menunggu campaign aktif...")
+    logger.info("AI Voice Server siap. Outbound campaign + inbound (ext 800) aktif.")
     try:
         await manager.start()
     except KeyboardInterrupt:

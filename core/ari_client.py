@@ -121,6 +121,22 @@ class AriClient:
     async def hangup_channel(self, channel_id: str, reason: str = "normal"):
         await self._request("DELETE", f"/channels/{channel_id}", params={"reason": reason})
 
+    async def set_channel_variable(self, channel_id: str, name: str, value: str):
+        """Set channel variable (dipakai untuk membawa ringkasan AI ke agent/dialplan)."""
+        await self._request(
+            "POST", f"/channels/{channel_id}/variable",
+            params={"variable": name, "value": value},
+        )
+
+    async def continue_in_dialplan(
+        self, channel_id: str, context: str, extension: str, priority: int = 1
+    ):
+        """Keluarkan channel dari Stasis dan lanjutkan di dialplan (context,extension,priority)."""
+        await self._request(
+            "POST", f"/channels/{channel_id}/continue",
+            params={"context": context, "extension": extension, "priority": priority},
+        )
+
     async def get_channel(self, channel_id: str) -> dict:
         return await self._request("GET", f"/channels/{channel_id}")
 
@@ -135,6 +151,11 @@ class AriClient:
     async def add_channel_to_bridge(self, bridge_id: str, channel_id: str):
         await self._request(
             "POST", f"/bridges/{bridge_id}/addChannel", params={"channel": channel_id}
+        )
+
+    async def remove_channel_from_bridge(self, bridge_id: str, channel_id: str):
+        await self._request(
+            "POST", f"/bridges/{bridge_id}/removeChannel", params={"channel": channel_id}
         )
 
     async def destroy_bridge(self, bridge_id: str):

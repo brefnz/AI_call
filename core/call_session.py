@@ -55,6 +55,7 @@ class CallSession:
         self._telephony_connected = False
         self.started_at = None
         self.connected_at = None
+        self._conversation_task: asyncio.Task | None = None
 
         # REVISI: buffer untuk gabungkan transcript_text yang di-stream Gemini
         # per kata/token (bukan per kalimat) sebelum disimpan ke DB. Tanpa
@@ -197,7 +198,7 @@ class CallSession:
             out_rate=settings.gemini.input_sample_rate_hz,
         )
 
-        async with GeminiLiveSession(settings.gemini, self.topic) as gemini:
+        async with self._create_gemini() as gemini:
             await self.db.execute(
                 "UPDATE call_session SET status=?, gemini_session_id=? WHERE id=?",
                 (CallState.IN_PROGRESS.value, self.session_id, self.session_id),
@@ -222,10 +223,7 @@ class CallSession:
                     self.session_id,
                 )
 
-            await gemini.send_text(
-                "Mulai panggilan ini. Sapa penelepon dengan ramah, perkenalkan topik campaign secara "
-                "singkat, lalu mulai ajukan pertanyaan pertama."
-            )
+            await gemini.send_text(self._kickoff_text())
 
             uplink_task = asyncio.create_task(self._pump_caller_audio_to_gemini(gemini))
 
@@ -235,6 +233,7 @@ class CallSession:
             # nggak ngirim event apa-apa lagi setelah hangup, loop nggantung
             # sampai koneksi Gemini timeout/error sendiri (bisa menit-menitan).
             conversation_task = asyncio.current_task()
+            self._conversation_task = conversation_task
 
             async def _hangup_watcher():
                 await self._channel_ended_future
@@ -294,7 +293,7 @@ class CallSession:
                     if turn_event.tool_call:
                         await self._handle_tool_call(gemini, turn_event.tool_call)
 
-                    if self.state.end_requested or not self._telephony_connected:
+                    if self._should_stop(turn_event):
                         break
             except asyncio.CancelledError:
                 logger.info(
@@ -317,6 +316,21 @@ class CallSession:
             (quality, self.session_id),
         )
         return outcome
+
+    # ---------------- hook (di-override InboundSession) ----------------
+
+    def _create_gemini(self) -> GeminiLiveSession:
+        return GeminiLiveSession(settings.gemini, self.topic)
+
+    def _kickoff_text(self) -> str:
+        return (
+            "Mulai panggilan ini. Sapa penelepon dengan ramah, perkenalkan topik campaign secara "
+            "singkat, lalu mulai ajukan pertanyaan pertama."
+        )
+
+    def _should_stop(self, turn_event) -> bool:
+        """Dicek tiap event Gemini; True = hentikan conversation loop."""
+        return self.state.end_requested or not self._telephony_connected
 
     async def _flush_transcript_buffer(self):
         """
@@ -376,7 +390,7 @@ class CallSession:
 
     # ---------------- cleanup & report ----------------
 
-    async def _cleanup_telephony(self):
+    async def _cleanup_telephony(self, hangup_main: bool = True):
         try:
             if self.em_channel_id:
                 await self.ari.hangup_channel(self.em_channel_id)
@@ -388,7 +402,7 @@ class CallSession:
         except Exception:
             pass
         try:
-            if self.channel_id:
+            if self.channel_id and hangup_main:
                 await self.ari.hangup_channel(self.channel_id)
         except Exception:
             pass
