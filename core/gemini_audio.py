@@ -42,8 +42,12 @@ class GeminiAudio:
         )
         # gemini-3.5-transcribe menaruh transkrip di part.audio_transcription,
         # bukan di resp.text (resp.text bisa None + warning).
+        # Untuk audio hening, Gemini bisa balikin candidate dengan content/parts
+        # = None -> iterasi langsung meledak (TypeError). Guard semua level.
         if resp.candidates:
-            for part in resp.candidates[0].content.parts:
+            content = getattr(resp.candidates[0], "content", None)
+            parts = getattr(content, "parts", None) if content else None
+            for part in parts or []:
                 at = getattr(part, "audio_transcription", None)
                 if at and getattr(at, "text", None):
                     return at.text.strip()
@@ -66,7 +70,9 @@ class GeminiAudio:
 
         audio = None
         if resp.candidates:
-            for part in resp.candidates[0].content.parts:
+            content = getattr(resp.candidates[0], "content", None)
+            parts = getattr(content, "parts", None) if content else None
+            for part in parts or []:
                 if part.inline_data and part.inline_data.data:
                     audio = part.inline_data.data
                     break
