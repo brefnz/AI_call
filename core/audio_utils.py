@@ -7,10 +7,45 @@ Helper resampling PCM16 mono. Dibutuhkan karena kontrak Gemini Live API:
 Pakai `audioop` (stdlib, atau `audioop-lts` di Python 3.13+) — cukup untuk
 resampling sederhana tanpa dependency berat seperti scipy/soundfile.
 """
+import io
+import wave
+
 try:
     import audioop
 except ImportError:  # Python 3.13+ tanpa stdlib audioop
     import audioop_lts as audioop  # type: ignore
+
+
+def pcm16_to_wav(pcm: bytes, rate: int) -> bytes:
+    """Bungkus PCM16LE mono jadi WAV (untuk upload ke endpoint STT)."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
+def wav_bytes_to_pcm16(data: bytes) -> tuple[bytes, int]:
+    """Decode WAV -> (PCM16LE mono, sample_rate). Naikkan 8-bit & stereo -> mono."""
+    with wave.open(io.BytesIO(data), "rb") as w:
+        rate = w.getframerate()
+        nch = w.getnchannels()
+        width = w.getsampwidth()
+        raw = w.readframes(w.getnframes())
+
+    pcm = raw
+    if width == 1:                      # 8-bit unsigned -> 16-bit signed
+        pcm = audioop.bias(pcm, 1, -128)
+        pcm = audioop.lin2lin(pcm, 1, 2)
+    elif width != 2:
+        raise ValueError(f"sample width {width} byte belum didukung")
+    if nch == 2:                        # stereo -> mono
+        pcm = audioop.tomono(pcm, 2, 0.5, 0.5)
+    elif nch != 1:
+        raise ValueError(f"channel {nch} belum didukung")
+    return pcm, rate
 
 
 class Resampler:

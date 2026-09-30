@@ -73,6 +73,10 @@ class GeminiConfig:
     voice_name: str = os.getenv("GEMINI_VOICE_NAME", "Puck")
     input_sample_rate_hz: int = 16000   # kontrak input Live API: PCM16 @16kHz mono
     output_sample_rate_hz: int = 24000  # kontrak output Live API: PCM16 @24kHz mono
+    # Model untuk pipeline STT/TTS terpisah (dipakai core/gemini_audio.py saat
+    # backend audio 9Router = "gemini").
+    stt_model: str = os.getenv("GEMINI_STT_MODEL", "gemini-3.5-transcribe")
+    tts_model: str = os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
 
 
 @dataclass
@@ -85,11 +89,15 @@ class NineRouterConfig:
     """
     base_url: str = os.getenv("NINEROUTER_BASE_URL", "http://studiouidesk.ddns.net:20128/v1")
     api_key: str = os.getenv("NINEROUTER_API_KEY", "")
-    model_llm: str = os.getenv("NINEROUTER_MODEL_LLM", "kenari/gpt-5-5")
+    model_llm: str = os.getenv("NINEROUTER_MODEL_LLM", "kenari/gemini-3-8-flash")
     model_stt: str = os.getenv("NINEROUTER_MODEL_STT", "kenari/whisper-large-v3-turbo")
     model_tts: str = os.getenv("NINEROUTER_MODEL_TTS", "kenari/kokoro-tts")
     tts_voice: str = os.getenv("NINEROUTER_TTS_VOICE", "af_heart")
     language: str = os.getenv("NINEROUTER_LANGUAGE", "id")
+    # Backend audio: "ninerouter" (route /audio/*, masih 400) atau "gemini"
+    # (core/gemini_audio.py — jalur yang sudah terbukti jalan). LLM selalu 9Router.
+    stt_backend: str = os.getenv("NINEROUTER_STT_BACKEND", "gemini")
+    tts_backend: str = os.getenv("NINEROUTER_TTS_BACKEND", "gemini")
     # Kontrak audio: caller masuk PCM16 @ sample_rate_rtp (ulaw=8000),
     # STT butuh PCM16 @ input_sample_rate_hz (16000).
     sample_rate_rtp: int = int(os.getenv("NINEROUTER_RTP_RATE", "8000"))

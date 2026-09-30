@@ -73,10 +73,8 @@ BLOKER YANG DIKETAHUI (bukan bug kode ini)
    bicara di log).
 """
 import asyncio
-import io
 import json
 import logging
-import wave
 from typing import Callable, Optional
 
 import aiohttp
@@ -87,7 +85,7 @@ except ImportError:  # Python 3.13+
     import audioop_lts as audioop  # type: ignore
 
 from config import NineRouterConfig
-from core.audio_utils import Resampler
+from core.audio_utils import Resampler, pcm16_to_wav, wav_bytes_to_pcm16
 from core.topic_config import Topic, build_system_instruction
 
 logger = logging.getLogger("ninerouter_voice")
@@ -153,41 +151,6 @@ OPENAI_TOOLS = [
         },
     },
 ]
-
-
-# --------------------------------------------------------------------------
-# Helpers audio (stdlib wave, no dependency tambahan)
-# --------------------------------------------------------------------------
-def pcm16_to_wav(pcm: bytes, rate: int) -> bytes:
-    """Bungkus PCM16LE mono jadi WAV (untuk upload ke /audio/transcriptions)."""
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(rate)
-        w.writeframes(pcm)
-    return buf.getvalue()
-
-
-def wav_bytes_to_pcm16(data: bytes) -> tuple[bytes, int]:
-    """Decode WAV -> (PCM16LE mono, sample_rate). Naikkan 8-bit & stereo -> mono."""
-    with wave.open(io.BytesIO(data), "rb") as w:
-        rate = w.getframerate()
-        nch = w.getnchannels()
-        width = w.getsampwidth()
-        raw = w.readframes(w.getnframes())
-
-    pcm = raw
-    if width == 1:                      # 8-bit unsigned -> 16-bit signed
-        pcm = audioop.bias(pcm, 1, -128)
-        pcm = audioop.lin2lin(pcm, 1, 2)
-    elif width != 2:
-        raise ValueError(f"sample width {width} byte belum didukung")
-    if nch == 2:                        # stereo -> mono
-        pcm = audioop.tomono(pcm, 2, 0.5, 0.5)
-    elif nch != 1:
-        raise ValueError(f"channel {nch} belum didukung")
-    return pcm, rate
 
 
 # --------------------------------------------------------------------------
@@ -279,6 +242,15 @@ class NineRouterVoice:
         if self._system_instruction:
             self._messages.append({"role": "system", "content": self._system_instruction})
 
+        # Backend audio: kalau dikonfigurasi "gemini", pakai GeminiAudio
+        # (core/gemini_audio.py) untuk STT/TTS; LLM tetap lewat 9Router.
+        self._gemini_audio = None
+        if cfg.stt_backend == "gemini" or cfg.tts_backend == "gemini":
+            from config import settings
+            from core.gemini_audio import GeminiAudio
+
+            self._gemini_audio = GeminiAudio(settings.gemini, rtp_rate=cfg.sample_rate_rtp)
+
     # ---- HTTP helpers ----
     def _headers(self, json_body: bool = True) -> dict:
         h = {"Authorization": f"Bearer {self.cfg.api_key}"}
@@ -296,7 +268,10 @@ class NineRouterVoice:
                 return await resp.json()
 
     async def transcribe(self, pcm16_16k: bytes) -> str:
-        """STT: /v1/audio/transcriptions (multipart). Return teks (bisa '')."""
+        """STT. Backend "gemini" -> GeminiAudio, selain itu /v1/audio/transcriptions."""
+        if self.cfg.stt_backend == "gemini":
+            return await self._gemini_audio.transcribe(pcm16_16k)
+
         wav_bytes = pcm16_to_wav(pcm16_16k, self.cfg.input_sample_rate_hz)
         form = aiohttp.FormData()
         form.add_field("file", wav_bytes, filename="audio.wav", content_type="audio/wav")
@@ -322,13 +297,17 @@ class NineRouterVoice:
                 "messages": self._messages,
                 "tools": OPENAI_TOOLS,
                 "tool_choice": "auto",
+                "stream": False,  # 9Router default-nya SSE; paksa JSON supaya mudah diparse
             },
         )
         msg = data["choices"][0]["message"]
         return {"content": msg.get("content"), "tool_calls": msg.get("tool_calls")}
 
     async def synthesize(self, text: str) -> bytes:
-        """TTS: /v1/audio/speech. Return PCM16 @ sample_rate_rtp (siap send_pcm)."""
+        """TTS. Backend "gemini" -> GeminiAudio, selain itu /v1/audio/speech."""
+        if self.cfg.tts_backend == "gemini":
+            return await self._gemini_audio.synthesize(text)
+
         url = f"{self.cfg.base_url}/audio/speech"
         payload = {
             "model": self.cfg.model_tts,
